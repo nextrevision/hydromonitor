@@ -1,0 +1,114 @@
+@font-face {
+    font-family: 'Montserrat';
+    font-style: normal;
+    font-weight: 400;
+    src: local('Montserrat Regular'), local('Montserrat-Regular'), url(/fonts/montserrat.woff2) format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2212, U+2215;
+}
+body {
+    background: #544947;
+    font-family: Montserrat, Arial, sans-serif;
+}
+h2 {
+    font-size: 14px;
+}
+.widget {
+    position: relative;
+    width: 100%;
+    margin: 0px auto;
+    padding: 0px 10px;
+    height: 80px;
+    color: #FFF;
+}
+.name-wrapper {
+    max-width: 25%;
+    width: 25%;
+    padding: 10px 0px 0px 0px;
+}
+.name {
+    text-align: left;
+    font-size: 24px;
+}
+.name:hover {
+    text-decoration-line: underline;
+    text-decoration-style: dashed;
+}
+.timestamp {
+    font-size: 14px;
+    color: #DBDBDB;
+    text-align: left;
+}
+.gravity-wrapper {
+    position: relative;
+    max-width: 23%;
+    width: 23%;
+}
+.gravity {
+    font-size: 36px;
+    position: absolute;
+    right: 10px;
+    top: 2px;
+}
+.gravity-stats {
+    font-size: 16px;
+    position: absolute;
+    right: 10px;
+    top: 48px;
+}
+.temperature,
+.battery,
+.signal {
+    max-width: 15%;
+    width: 15%;
+}
+.settings {
+    top: 18px;
+    right: 15px;
+    font-size: 32px;
+    position: absolute;
+}
+.settings a {
+    color: #fff;
+}
+.widget .warning {
+    top: 65px;
+    right: 10px;
+    font-size: 30px;
+    position: absolute;
+}
+.info {
+    float: left;
+    height: 100%;
+    text-align: center;
+    color: #fff;
+    padding-top: 10px;
+}
+.info span {
+    display: inline-block;
+    font-size: 30px;
+    margin-top: 10px;
+}
+.warning {
+    color: #ff9800;
+}
+.black .widget {
+    background-color: #000;
+}
+.red .widget {
+    background-color: #F44336;
+}
+.green .widget {
+    background-color: #4CAF50;
+}
+.purple .widget {
+    background-color: #9c27b0;
+}
+.orange .widget {
+    background-color: #ff9800;
+}
+.blue .widget {
+    background-color: #2196F3;
+}
+.pink .widget {
+    background-color: #e91e63;
+}

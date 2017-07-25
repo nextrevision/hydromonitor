@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+  <title>Hydromonitor</title>
+
+  <script src="/js/vue.min.js"></script>
+  <script src="/js/socket.io.slim.js"></script>
+  <script src="/js/jquery-2.1.1.min.js"></script>
+  <script src="/js/materialize.min.js"></script>
+
+	<link type="text/css" rel="stylesheet" href="/css/materialdesignicons.min.css" media="all" />
+  <link type="text/css" rel="stylesheet" href="/css/materialize.min.css"  media="screen,projection"/>
+  <link type="text/css" rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <div id="app">
+		<pre>{{ devices }}</pre>
+    <div>
+        <div v-for="device,i in devices" class="widget" :class="device.color">
+            <div class="info name-wrapper">
+                <div v-if="device.name !== ''" class="name">{{device.name}}</div>
+                <div v-if="device.name === ''" class="name">{{device.color}}</div>
+                <div class="timestamp"><i class="mdi mdi-clock"></i> Updated 3 minutes ago<div>
+            </div>
+            <div class="info gravity-wrapper">
+                <div class="gravity"><i class="mdi mdi-trending-down"></i> {{ device.gravity }}</div>
+                <div class="gravity-stats">-0.002 (-3.04%)</div>
+            </div>
+            <div class="info temperature">
+                <span class='update'><i class="mdi mdi-thermometer"></i> {{ device.temperature }}</span>
+            </div>
+            <div class="info signal">
+                <span class='update'><i class="mdi mdi-signal"></i> {{ device.rssi }}</span>
+            </div>
+            <div class="settings">
+                <a class="waves-effect waves-light dropdown-button" href="#" :data-activates="'settingsDropdown'+i">
+                    <i class="mdi mdi-dots-vertical"></i>
+                </a>
+                <ul :id="'settingsDropdown' + i" class='dropdown-content'>
+                </ul>
+            </div>
+        </div>
+    </div>
+  </div>
+
+  <script>
+    var socket = io();
+    new Vue({
+      el: '#app',
+      data: {
+				deviceMetrics: {},
+        deviceSettings: {},
+				devices: {},
+      },
+      created: function() {
+        socket.on('updated-devices', function(data) {
+          this.devices = data.devices;
+        }.bind(this));
+      },
+    })
+  </script>
+</body>
+</html>
