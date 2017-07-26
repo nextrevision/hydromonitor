@@ -3,16 +3,14 @@
 var path = require('path');
 var pkg = require(path.join(__dirname, 'package.json'));
 var Bleacon = require('bleacon');
-var sqlite3 = require('sqlite3').verbose();
 var program = require('commander');
 var express = require('express');
 var app = express();
 var api = express.Router();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
-
-// internal device state
 var devices = {}
+var metrics = {}
 
 program
     .version(pkg.version)
@@ -20,59 +18,36 @@ program
     .option('-f, --filename <path>', 'Filename for sqlite DB (defaults to in memory)', ':memory:')
     .parse(process.argv);
 
-var db = new sqlite3.Database(program.filename);
-db.serialize(function() {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS device (
-      id VARCHAR(255) PRIMARY KEY,
-      name VARCHAR(255),
-      color VARCHAR(50),
-      endpoint TEXT,
-      created DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  db.run(`
-    CREATE TABLE IF NOT EXISTS metric (
-      id INTEGER PRIMARY KEY,
-      device_id VARCHAR(255) NOT NULL,
-      proximity VARCHAR(255),
-      rssi INTEGER,
-      gravity REAL,
-      temperature INTEGER,
-      created DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-});
+//var db = require('./db');
+//db.init(program.filename);
+//setInterval(function() {
+//  db.saveState(devices);
+//}.bind(this), 10000);
 
 api.get('/devices', function(req, res) {
-  db.all("SELECT id, name, color, endpoint, created, updated FROM device", function(err, row) {
-    if (err) {
-      console.err(err);
-      res.status(500);
-      res.end();
-      return;
-    } else {
-      res.json(row);
-      res.status(200);
-    }
-    res.end();
-  });
+  res.json(devices);
+  res.status(200);
+  res.end();
 });
 
 api.get('/devices/:id', function(req, res) {
-  db.get("SELECT id, name, color, endpoint, created, updated FROM device WHERE id=?", function(err, row) {
-    if (err) {
-      console.err(err);
-      res.status(500);
-      res.end();
-      return;
-    } else {
-      res.json(row);
-      res.status(200);
-    }
+  if (!devices[req.params.id]) {
+    res.status(404);
     res.end();
-  });
+  }
+  res.json(devices[req.params.id]);
+  res.status(200);
+  res.end();
+});
+
+api.get('/devices/:id/metrics', function(req, res) {
+  if (!devices[req.params.id]) {
+    res.status(404);
+    res.end();
+  }
+  res.json(metrics[req.params.id]);
+  res.status(200);
+  res.end();
 });
 
 app.use('/api/v1', api);
@@ -81,73 +56,92 @@ app.get('/', function(req, res) {
 });
 app.use(express.static('static'))
 
-
-
-function addDevice(color, adv) {
-  devices[color] = {
-    color: color,
-    proximity: adv.proximity,
-    rssi: adv.rssi,
-    gravity: adv.minor / 1000,
-    temperature: adv.major,
-  }
-  io.emit('updated-devices', {devices: devices})
-}
-
-Bleacon.on('discover', function(bleacon) {
-  switch(bleacon.uuid){
-    case 'a495bb10c5b14b44b5121370f02d74de':
-    console.log('Red ' + bleacon.major + ',' + bleacon.minor);
-    break;
-
-    case 'a495bb20c5b14b44b5121370f02d74de':
-    console.log('Green ' + bleacon.major + ',' + bleacon.minor);
-    break;
-
-    case 'a495bb30c5b14b44b5121370f02d74de':
-    //console.log('Black ' + bleacon.major + ',' + bleacon.minor);
-    addDevice('black', bleacon);
-    break;
-
-    case 'a495bb40c5b14b44b5121370f02d74de':
-    console.log('Purple ' + bleacon.major + ',' + bleacon.minor);
-    break;
-
-    case 'a495bb50c5b14b44b5121370f02d74de':
-    console.log('Orange ' + bleacon.major + ',' + bleacon.minor);
-    break;
-
-    case 'a495bb60c5b14b44b5121370f02d74de':
-    console.log('Blue ' + bleacon.major + ',' + bleacon.minor);
-    break;
-
-    case 'a495bb70c5b14b44b5121370f02d74de':
-    console.log('Yellow ' + bleacon.major + ',' + bleacon.minor);
-    break;
-
-    case 'a495bb80c5b14b44b5121370f02d74de':
-    console.log('Pink ' + bleacon.major + ',' + bleacon.minor);
-    break;
-  }
+io.on("connection", function(socket) {
+  socket.emit('updated-devices', {devices: devices});
+  socket.emit('updated-metrics', {metrics: metrics});
 });
 
-console.log('Listening for Tilt advertisements in background');
+function getColor(uuid) {
+  switch(uuid) {
+    case 'a495bb10c5b14b44b5121370f02d74de':
+      return 'red';
+    case 'a495bb20c5b14b44b5121370f02d74de':
+      return 'green';
+    case 'a495bb30c5b14b44b5121370f02d74de':
+      return 'black';
+    case 'a495bb40c5b14b44b5121370f02d74de':
+      return 'purple';
+    case 'a495bb50c5b14b44b5121370f02d74de':
+      return 'orange';
+    case 'a495bb60c5b14b44b5121370f02d74de':
+      return 'blue';
+    case 'a495bb70c5b14b44b5121370f02d74de':
+      return 'yellow';
+    case 'a495bb80c5b14b44b5121370f02d74de':
+      return 'pink';
+    default:
+      return 'unknown';
+  }
+};
+
+Bleacon.on('discover', function(adv) {
+  var color = getColor(adv.uuid);
+  if (!devices[color]) {
+    devices[color] = {
+      name: '',
+      color: color,
+      endpoint: '',
+    }
+    metrics[color] = [{
+      rssi: adv.rssi,
+      gravity: (adv.minor/1000),
+      temperature: adv.major,
+      trend: {
+        difference: 0.000,
+        percentage: 0.00,
+        trend: 'neutral'
+      },
+      created: Date.now()
+    }];
+    io.emit('updated-metrics', {metrics: metrics});
+  }
+  devices[color].rssi = adv.rssi;
+  devices[color].proximity = adv.proximity;
+  devices[color].gravity = (adv.minor / 1000);
+  devices[color].temperature = adv.major;
+  devices[color].updated = Date.now();
+  io.emit('updated-devices', {devices: devices});
+});
+
 Bleacon.startScanning();
 
 setInterval(function() {
-  console.log("Saving state for " + Object.keys(devices).length + " devices...");
-  var deviceStmt = db.prepare("INSERT OR IGNORE INTO device (id, color) VALUES(?,?)");
-  var metricStmt = db.prepare("INSERT INTO metric (device_id, proximity, rssi, temperature, gravity) VALUES(?,?,?,?,?)");
-  var updateDeviceStmt = db.prepare("UPDATE device SET updated=CURRENT_TIMESTAMP WHERE id=?");
-  Object.keys(devices).forEach(function(key) {
-    deviceStmt.run(devices[key].color, devices[key].color);
-    metricStmt.run(devices[key].color, devices[key].proximity, devices[key].rssi, devices[key].temperature, devices[key].gravity);
-    updateDeviceStmt.run(devices[key].color);
+  Object.values(devices).forEach(function(device) {
+    var last = metrics[device.color][metrics[device.color].length-1];
+    var trend = function() {
+      if (device.gravity > last.gravity) {
+        return 'up';
+      } else if (device.gravity < last.gravity) {
+        return 'down';
+      }
+      return 'neutral';
+    }();
+    metrics[device.color].push({
+      rssi: device.rssi,
+      proximity: device.proximity,
+      gravity: device.gravity,
+      temperature: device.temperature,
+      trend: {
+        difference: device.gravity - last.gravity,
+        percentage: ((device.gravity-last.gravity)/((device.gravity+last.gravity)/2)*100),
+        trend: trend
+      },
+      updated: device.updated
+    });
   });
-  deviceStmt.finalize();
-  metricStmt.finalize();
-  updateDeviceStmt.finalize();
+  io.emit('updated-metrics', {metrics: metrics});
 }.bind(this), 10000);
+//}.bind(this), 900000);
 
 http.listen(program.port, function() {
   console.log('Starting web server on port ' + program.port);
