@@ -43,7 +43,7 @@ db.serialize(function() {
       rssi INTEGER,
       gravity REAL,
       temperature INTEGER,
-      created DATETIME DEFAULT (DATETIME('now','localhost'))
+      created DATETIME DEFAULT (DATETIME('now','localtime'))
     )
   `);
 });
@@ -148,9 +148,8 @@ api.post('/devices/:id/refresh', function(req, res) {
 });
 
 api.post('/devices/:id/reset', function(req, res) {
-  var stmt = db.prepare('DELETE FROM metric WHERE device_id=?');
-  stmt.run(req.params.id);
-  stmt.finalize();
+  db.run('DELETE FROM metric');
+  db.run('DELETE FROM device');
   res.status(200);
   res.end();
 });
