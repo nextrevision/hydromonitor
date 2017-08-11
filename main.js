@@ -238,11 +238,11 @@ setInterval(function() {
         form: {'SG': devices[key].gravity, 'Temp': devices[key].temperature, 'Color': key, 'Timepoint': timepoint}
       }
       log('Posting data to endpoint: ' + devices[key].endpoint);
-      //request(options, function (error, response, body) {
-      //  if (!error && response.statusCode == 200) {
-      //    log(body)
-      //  }
-      //});
+      request(options, function (error, response, body) {
+        if (!error && response.statusCode == 200) {
+          log(body)
+        }
+      });
     }
   });
 
@@ -251,7 +251,6 @@ setInterval(function() {
   updateDeviceStmt.finalize();
 
   log('Saved device state');
-//}.bind(this), 10000);
 }.bind(this), 900000);
 
 http.listen(8080, function() {
