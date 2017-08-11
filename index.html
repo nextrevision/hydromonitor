@@ -7,10 +7,12 @@
   <title>Hydromonitor</title>
 
   <script src="/js/vue.min.js"></script>
-  <script src="/js/socket.io.slim.js"></script>
+  <script src="/js/vue-resource.min.js"></script>
   <script src="/js/jquery-2.1.1.min.js"></script>
   <script src="/js/materialize.min.js"></script>
   <script src="/js/moment.min.js"></script>
+  <script src="/js/chart.bundle.min.js"></script>
+  <script src="/js/vue-charts.min.js"></script>
 
 	<link type="text/css" rel="stylesheet" href="/css/materialdesignicons.min.css" media="all" />
   <link type="text/css" rel="stylesheet" href="/css/materialize.min.css"  media="screen,projection"/>
@@ -18,65 +20,272 @@
 </head>
 <body>
   <div id="app">
-    <div v-for="device,i in devices" class="widget" :class="device.color">
-        <div class="info name-wrapper">
-            <div v-if="device.name !== ''" class="name">{{ device.name }}</div>
-            <div v-if="device.name === ''" class="name">{{ device.color }}</div>
-            <div class="timestamp"><i class="mdi mdi-clock"></i> Updated {{ timeAgo(device.updated) }}</div>
-        </div>
-        <div class="info gravity-wrapper">
-            <div class="gravity">
-              <i class="mdi" :class="'mdi-trending-'+trendType(device.color)"></i> {{ device.gravity.toFixed(3) }}
-            </div>
-            <div class="gravity-stats">{{ trendDifference(device.color) }} ({{ trendPercentage(device.color) }}%)</div>
-        </div>
-        <div class="info temperature">
-            <span class='update'><i class="mdi mdi-thermometer"></i> {{ device.temperature }}</span>
-        </div>
-        <div class="info signal">
-            <span class='update'><i class="mdi mdi-signal"></i> {{ device.rssi }}</span>
-        </div>
-        <div class="settings">
-            <a class="waves-effect waves-light dropdown-button" href="#" :data-activates="'settingsDropdown'+i">
-                <i class="mdi mdi-dots-vertical"></i>
-            </a>
-            <ul :id="'settingsDropdown' + i" class='dropdown-content'>
-            </ul>
-        </div>
+
+  <div v-if="device !== null" id="settingsModal" class="modal modal-fixed-footer">
+      <div class="modal-content">
+          <h4>{{ capCase(device.color) }}</h4>
+          <div class="row">
+              <form class="col s12">
+                  <div class="row">
+                      <div class="input-field col s12">
+                          <input v-model="device.endpoint" id="endpoint"
+                                 placeholder="https://brewmaker.com/metrics/M39dk2d93" type="text"
+                                 class="validate">
+                          <label for="endpoint" class="active">HTTP Endpoint (for posting stats)</label>
+                      </div>
+                  </div>
+              </form>
+          </div>
+      </div>
+      <div class="modal-footer">
+          <a @click="updateDeviceEndpoint()" href="#!" class="modal-action waves-effect waves-green-lighten btn green">Save</a>
+          <a href="#!" class="modal-action modal-close waves-effect waves-green btn red">Close</a>
+      </div>
+  </div>
+
+  <nav v-if="device !== null">
+    <div class="nav-wrapper">
+      <a href="#!" class="brand-logo">Hydromonitor</a>
+      <ul class="right">
+        <li><a @click="resetDevice()" class="waves-effect waves-light btn" href="#">Reset</a></li>
+        <li><a @click="showSettings()" href="#"><i class="mdi mdi-settings"></i></a></li>
+        <li><a @click="refreshDevice()" href="#"><i class="mdi mdi-refresh"></i></a></li>
+      </ul>
     </div>
+  </nav>
+
+  <div v-if="device === null" id="nodevice">
+    <h1 class="center" style="color: #fff;">Waiting for devices</h1>
+  </div>
+  <div v-if="device !== null" class="widget" :class="device.color">
+      <div class="info name-wrapper">
+          <div class="name">{{ capCase(device.color) }}</div>
+          <div class="timestamp"><i class="mdi mdi-clock"></i> Updated {{ timeAgo }}</div>
+      </div>
+      <div class="info gravity-wrapper">
+          <div class="gravity">
+            <i class="mdi" :class="'mdi-trending-'+trend.type"></i> {{ latestMetric.gravity.toFixed(3) }}
+          </div>
+          <div class="gravity-stats">{{ trend.difference.toFixed(3) }} ({{ trend.percentage.toFixed(3) }}%)</div>
+      </div>
+      <div class="info temperature">
+          <span class='update'><i class="mdi mdi-thermometer"></i> {{ latestMetric.temperature }}</span>
+      </div>
+      <div class="info signal">
+          <span class='update'><i class="mdi mdi-signal"></i> {{ latestMetric.rssi }}</span>
+      </div>
+  </div>
+    <div v-show="device !== null" class="row">
+    <div class="col s12">
+      <ul class="tabs tabs-fixed-width">
+        <li class="tab col s3"><a class="active" href="#gravity">Gravity</a></li>
+        <li class="tab col s3"><a href="#temperature">Temperature</a></li>
+        <li class="tab col s3"><a href="#signal">Signal</a></li>
+      </ul>
+    </div>
+    <div id="gravity" class="col s12">
+      <chartjs-line :height="100" :option="chartOptions" :labels="gravityLabels" :data="gravityData" :bind="true"></chartjs-line>
+    </div>
+    <div id="temperature" class="col s12">
+      <chartjs-line :height="100" :option="chartOptions" :labels="tempLabels" :data="tempData" :bind="true"></chartjs-line>
+    </div>
+    <div id="signal" class="col s12">
+      <chartjs-line :height="100" :option="chartOptions" :labels="signalLabels" :data="signalData" :bind="true"></chartjs-line>
+    </div>
+  </div>
   </div>
 
   <script>
-    var socket = io();
+    Vue.use(VueCharts);
     new Vue({
       el: '#app',
       data: {
-				deviceMetrics: {},
-        deviceSettings: {},
-				devices: {},
-				metrics: {}
+        chartOptions: {
+          responsive: true,
+          maintainAspectRatio: true,
+        },
+        trend: {
+          difference: 0.000,
+          percentage: 0.000,
+          type: 'neutral'
+        },
+        latestMetric: {
+          gravity: 0.000,
+          temperature: 0,
+          rssi: 0
+        },
+				metrics: [],
+				device: null,
+        timeNow: null
       },
       created: function() {
-        socket.on('updated-devices', function(data) {
-          this.devices = data.devices;
-        }.bind(this));
-        socket.on('updated-metrics', function(data) {
-          this.metrics = data.metrics;
-          console.log(data.metrics);
-        }.bind(this));
+        this.loadDevice();
+        this.timeNow = this.localTime();
+        setInterval(function() {
+          this.loadDevice();
+        }.bind(this), 10000);
+        setInterval(function() {
+          this.timeNow = this.localTime();
+        }.bind(this), 10000);
+      },
+      computed: {
+        timeAgo: function() {
+          return moment(this.device.updated).from(this.timeNow);
+        },
+        filteredMetrics: function() {
+          if (this.metrics.length === 0) {
+            return [];
+          }
+          var lastItem = null;
+          return this.metrics.filter(function(item) {
+            if (lastItem === null) {
+              lastItem = item;
+              return item;
+            }
+            if ((Date.parse(item.created)-Date.parse(lastItem.created)) >= 900000) {
+              lastItem = item;
+              return item;
+            }
+          });
+        },
+        gravityLabels: function() {
+          var data = [];
+          this.filteredMetrics.forEach(function(item) {
+            var d = new Date(Date.parse(item.created));
+            data.push(d.toISOString().substr(11, 8));
+          });
+          return data;
+        },
+        gravityData: function() {
+          var data = [];
+          this.filteredMetrics.forEach(function(item) {
+            data.push(item.gravity);
+          });
+          return data;
+        },
+        tempLabels: function() {
+          var data = [];
+          this.filteredMetrics.forEach(function(item) {
+            var d = new Date(Date.parse(item.created));
+            data.push(d.toISOString().substr(11, 8));
+          });
+          return data;
+        },
+        tempData: function() {
+          var data = [];
+          this.filteredMetrics.forEach(function(item) {
+            data.push(item.temperature);
+          });
+          return data;
+        },
+        signalLabels: function() {
+          var data = [];
+          this.filteredMetrics.forEach(function(item) {
+            var d = new Date(Date.parse(item.created));
+            data.push(d.toISOString().substr(11, 8));
+          });
+          return data;
+        },
+        signalData: function() {
+          var data = [];
+          this.filteredMetrics.forEach(function(item) {
+            data.push(item.rssi);
+          });
+          return data;
+        }
       },
       methods: {
-        timeAgo: function(t) {
-          return moment(t).fromNow();
+        localTime() {
+          var date = new Date();
+          var offset = (new Date().getTimezoneOffset() / 60) * -1;
+          var now = new Date(date.getTime() + offset);
+          return now;
         },
-        trendType: function(color) {
-          return this.metrics[color][this.metrics[color].length-1].trend.trend;
+        loadDevice() {
+          this.$http.get('/api/v1/devices').then(function(response) {
+            if (response.body) {
+              var newDevice = response.body[0];
+              this.loadMetrics(newDevice.color);
+              this.device = newDevice;
+            }
+          }, function(response) {
+            console.log('ERROR');
+            console.log(response);
+          });
         },
-        trendDifference: function(color) {
-          return this.metrics[color][this.metrics[color].length-1].trend.difference.toFixed(3);
+        loadMetrics(color) {
+          this.$http.get('/api/v1/devices/'+color+'/metrics').then(function(response) {
+            if (response.body) {
+              var newMetrics = response.body;
+              if (newMetrics.length === 0) {
+                return
+              }
+
+              var latestMetric = newMetrics[newMetrics.length - 1];
+              if (newMetrics.length > 1) {
+                var priorMetric = newMetrics[newMetrics.length - 2];
+                var trendType = function() {
+                  if (priorMetric.gravity > latestMetric.gravity) {
+                    return 'down';
+                  } else if (priorMetric.gravity < latestMetric.gravity) {
+                    return 'up';
+                  }
+                  return 'neutral';
+                }();
+                this.trend.difference = latestMetric.gravity - priorMetric.gravity;
+                this.trend.percentage = ((latestMetric.gravity-priorMetric.gravity)/(latestMetric.gravity+priorMetric.gravity)/2)*100;
+                this.trend.type = trendType;
+              }
+
+              this.latestMetric = newMetrics[newMetrics.length - 1];
+              this.metrics = newMetrics;
+            }
+          }, function(response) {
+            console.log('ERROR');
+            console.log(response);
+          });
         },
-        trendPercentage: function(color) {
-          return this.metrics[color][this.metrics[color].length-1].trend.percentage.toFixed(2);
+        refreshDevice() {
+          this.$http.post('/api/v1/devices/'+this.device.color+'/refresh').then(function(response) {
+            if (response.body) {
+              this.loadDevice();
+            }
+          }, function(response) {
+            console.log('ERROR');
+            console.log(response);
+          });
+          this.loadDevice();
+        },
+        resetDevice() {
+          this.$http.post('/api/v1/devices/'+this.device.color+'/reset').then(function(response) {
+            Materialize.toast('Reset device metrics!', 4000);
+            this.loadMetrics();
+          }, function(response) {
+            console.log('ERROR');
+            console.log(response);
+            Materialize.toast('Error resetting device metrics!', 4000);
+          });
+          this.loadDevice();
+        },
+        updateDeviceEndpoint() {
+          this.$http.post('/api/v1/devices/'+this.device.color+'/endpoint', {endpoint: this.device.endpoint}).then(function(response) {
+            Materialize.toast('Updated device endpoint!', 4000);
+          }, function(response) {
+            console.log('ERROR');
+            console.log(response);
+            Materialize.toast('Error updating device endpoint: ' + response, 4000);
+          });
+          $('#settingsModal').modal('close');
+        },
+        capCase (word) {
+          return word.replace(/_/g, ' ').split(' ').map((w) => {
+            return w.charAt(0).toUpperCase() + w.slice(1);
+          }).join(' ')
+        },
+        showSettings() {
+          if (this.device !== null) {
+            $('#settingsModal').modal('open')
+          }
         },
       }
     })

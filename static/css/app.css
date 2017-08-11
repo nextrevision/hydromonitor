@@ -6,7 +6,7 @@
     unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2212, U+2215;
 }
 body {
-    background: #544947;
+    background: #FFF;
     font-family: Montserrat, Arial, sans-serif;
 }
 h2 {
@@ -21,8 +21,8 @@ h2 {
     color: #FFF;
 }
 .name-wrapper {
-    max-width: 25%;
-    width: 25%;
+    max-width: 37%;
+    width: 37%;
     padding: 10px 0px 0px 0px;
 }
 .name {
@@ -58,17 +58,8 @@ h2 {
 .temperature,
 .battery,
 .signal {
-    max-width: 15%;
-    width: 15%;
-}
-.settings {
-    top: 18px;
-    right: 15px;
-    font-size: 32px;
-    position: absolute;
-}
-.settings a {
-    color: #fff;
+    max-width: 20%;
+    width: 20%;
 }
 .widget .warning {
     top: 65px;
